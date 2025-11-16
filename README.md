@@ -5,7 +5,7 @@ by CO23316 and CO23356
 ## Directions
 1. Clone the repository to your local machine using the command:
    ```
-   git clone ""
+   git clone "https://github.com/BhavyamDhandIsHere/Resume-Screening-App-main.git"
 2. Navigate to the project directory:
    ```
     cd Resume-Screening-App
