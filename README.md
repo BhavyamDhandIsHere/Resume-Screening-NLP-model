@@ -8,7 +8,7 @@ by CO23316 and CO23356
    git clone "https://github.com/BhavyamDhandIsHere/Resume-Screening-App-main.git"
 2. Navigate to the project directory:
    ```
-    cd Resume-Screening-App
+   cd Resume-Screening-App-main
 3. Install the required dependencies using pip: 
     ```
     pip install -r requirements.txt
