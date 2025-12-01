@@ -1,124 +1,121 @@
-# you need to install all these in your terminal
-# pip install streamlit
-# pip install scikit-learn
-# pip install python-docx
-# pip install PyPDF2
-
-
 import streamlit as st
 import pickle
-import docx  # Extract text from Word file
-import PyPDF2  # Extract text from PDF
+import docx
+import PyPDF2
 import re
+import spacy
 
-# Load pre-trained model and TF-IDF vectorizer (ensure these are saved earlier)
-svc_model = pickle.load(open('clf.pkl', 'rb'))  # Example file name, adjust as needed
-tfidf = pickle.load(open('tfidf.pkl', 'rb'))  # Example file name, adjust as needed
-le = pickle.load(open('encoder.pkl', 'rb'))  # Example file name, adjust as needed
+# Load spaCy NER model
+# Make sure to run: python -m spacy download en_core_web_sm
+nlp_ner = spacy.load("en_core_web_sm")
+
+# Load pre-trained model and TF-IDF vectorizer
+svc_model = pickle.load(open('models/clf.pkl', 'rb'))
+tfidf = pickle.load(open('models/tfidf.pkl', 'rb'))
+le = pickle.load(open('models/encoder.pkl', 'rb'))
 
 
-# Function to clean resume text
+# Clean resume text
 def cleanResume(txt):
-    cleanText = re.sub('http\S+\s', ' ', txt)
+    cleanText = re.sub('http\\S+\\s', ' ', txt)
     cleanText = re.sub('RT|cc', ' ', cleanText)
-    cleanText = re.sub('#\S+\s', ' ', cleanText)
-    cleanText = re.sub('@\S+', '  ', cleanText)
+    cleanText = re.sub('#\\S+\\s', ' ', cleanText)
+    cleanText = re.sub('@\\S+', '  ', cleanText)
     cleanText = re.sub('[%s]' % re.escape("""!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"""), ' ', cleanText)
     cleanText = re.sub(r'[^\x00-\x7f]', ' ', cleanText)
-    cleanText = re.sub('\s+', ' ', cleanText)
+    cleanText = re.sub('\\s+', ' ', cleanText)
     return cleanText
 
 
-# Function to extract text from PDF
+# Extract text from PDF
 def extract_text_from_pdf(file):
-    pdf_reader = PyPDF2.PdfReader(file)
+    reader = PyPDF2.PdfReader(file)
     text = ''
-    for page in pdf_reader.pages:
-        text += page.extract_text()
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text
     return text
 
 
-# Function to extract text from DOCX
+# Extract text from DOCX
 def extract_text_from_docx(file):
     doc = docx.Document(file)
-    text = ''
-    for paragraph in doc.paragraphs:
-        text += paragraph.text + '\n'
-    return text
+    return "\n".join(p.text for p in doc.paragraphs)
 
 
-# Function to extract text from TXT with explicit encoding handling
+# Extract text from TXT
 def extract_text_from_txt(file):
-    # Try using utf-8 encoding for reading the text file
     try:
-        text = file.read().decode('utf-8')
+        return file.read().decode('utf-8')
     except UnicodeDecodeError:
-        # In case utf-8 fails, try 'latin-1' encoding as a fallback
-        text = file.read().decode('latin-1')
-    return text
+        return file.read().decode('latin-1')
 
 
-# Function to handle file upload and extraction
+# Decide extractor based on file
 def handle_file_upload(uploaded_file):
-    file_extension = uploaded_file.name.split('.')[-1].lower()
-    if file_extension == 'pdf':
-        text = extract_text_from_pdf(uploaded_file)
-    elif file_extension == 'docx':
-        text = extract_text_from_docx(uploaded_file)
-    elif file_extension == 'txt':
-        text = extract_text_from_txt(uploaded_file)
+    ext = uploaded_file.name.split('.')[-1].lower()
+    if ext == 'pdf':
+        return extract_text_from_pdf(uploaded_file)
+    elif ext == 'docx':
+        return extract_text_from_docx(uploaded_file)
+    elif ext == 'txt':
+        return extract_text_from_txt(uploaded_file)
     else:
-        raise ValueError("Unsupported file type. Please upload a PDF, DOCX, or TXT file.")
-    return text
+        raise ValueError("Unsupported file type!")
 
 
-# Function to predict the category of a resume
+# Prediction function
 def pred(input_resume):
-    # Preprocess the input text (e.g., cleaning, etc.)
     cleaned_text = cleanResume(input_resume)
-
-    # Vectorize the cleaned text using the same TF-IDF vectorizer used during training
-    vectorized_text = tfidf.transform([cleaned_text])
-
-    # Convert sparse matrix to dense
-    vectorized_text = vectorized_text.toarray()
-
-    # Prediction
-    predicted_category = svc_model.predict(vectorized_text)
-
-    # get name of predicted category
-    predicted_category_name = le.inverse_transform(predicted_category)
-
-    return predicted_category_name[0]  # Return the category name
+    vec = tfidf.transform([cleaned_text]).toarray()
+    pred_label = svc_model.predict(vec)
+    return le.inverse_transform(pred_label)[0]
 
 
-# Streamlit app layout
+# Extract entities using spaCy
+def extract_entities(text):
+    doc = nlp_ner(text)
+    entities = {}
+    for ent in doc.ents:
+        entities.setdefault(ent.label_, set()).add(ent.text)
+    return {label: sorted(list(vals)) for label, vals in entities.items()}
+
+
+# Streamlit app UI
 def app():
-    st.set_page_config(page_title="Resume Category Prediction", page_icon="📄", layout="wide")
+    st.set_page_config(page_title="Resume Scanner with NER", page_icon="📄", layout="wide")
+    st.title("Resume Scanner (Category Prediction + NER)")
+    st.markdown("Upload a resume and extract job category + important info!")
 
-    st.title("Resume Category Prediction App")
-    st.markdown("Upload a resume in PDF, TXT, or DOCX format and get the predicted job category.")
+    uploaded_file = st.file_uploader("Upload Resume (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"])
 
-    # File upload section
-    uploaded_file = st.file_uploader("Upload a Resume", type=["pdf", "docx", "txt"])
-
-    if uploaded_file is not None:
-        # Extract text from the uploaded file
+    if uploaded_file:
         try:
             resume_text = handle_file_upload(uploaded_file)
-            st.write("Successfully extracted the text from the uploaded resume.")
+            st.success("Resume text extracted!")
 
-            # Display extracted text (optional)
-            if st.checkbox("Show extracted text", False):
-                st.text_area("Extracted Resume Text", resume_text, height=300)
+            if st.checkbox("Show Extracted Text"):
+                st.text_area("Resume Text", resume_text, height=250)
 
-            # Make prediction
-            st.subheader("Predicted Category")
+            st.subheader("Predicted Job Category")
             category = pred(resume_text)
-            st.write(f"The predicted category of the uploaded resume is: **{category}**")
+            st.markdown(f"🎯 **{category}**")
+
+            # Apply NER
+            if st.checkbox("Show Named Entity Recognition (NER)"):
+                st.subheader("Extracted Resume Entities")
+                entities = extract_entities(resume_text)
+
+                if not entities:
+                    st.info("No entities found!")
+                else:
+                    for label, items in entities.items():
+                        st.markdown(f"**{label}**")
+                        st.write(", ".join(items))
 
         except Exception as e:
-            st.error(f"Error processing the file: {str(e)}")
+            st.error(f"Processing Error: {str(e)}")
 
 
 if __name__ == "__main__":
