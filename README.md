@@ -11,7 +11,8 @@ by CO23316 and CO23356
    cd Resume-Screening-App-main
 3. Install the required dependencies using pip: 
     ```
-    pip install --upgrade pip wheel setuptools
+   python.exe -m pip install --upgrade pip 
+   pip install --upgrade pip wheel setuptools
     pip install -r requirements.txt 
    python -m spacy download en_core_web_sm en_core_web_trf
 
