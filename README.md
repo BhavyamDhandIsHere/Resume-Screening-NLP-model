@@ -14,7 +14,8 @@ by CO23316 and CO23356
    python.exe -m pip install --upgrade pip 
    pip install --upgrade pip wheel setuptools
     pip install -r requirements.txt 
-   python -m spacy download en_core_web_sm en_core_web_trf
+   python -m spacy download en_core_web_sm
+   python -m spacy download en_core_web_trf
 
 4. Run the application:
     ```
